@@ -50,6 +50,22 @@ jobs:
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
+    - name: Setup ccache
+      uses: actions/cache@v4
+      with:
+        path: /workdir/openwrt/.ccache
+        key: ${{ runner.os }}-ccache-${{ hashFiles(env.CONFIG_FILE) }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-ccache-${{ hashFiles(env.CONFIG_FILE) }}-
+          ${{ runner.os }}-ccache-
+
+    - name: Initialize ccache settings
+      run: |
+        echo "CCACHE_DIR=/workdir/openwrt/.ccache" >> $GITHUB_ENV
+        export CCACHE_DIR=/workdir/openwrt/.ccache
+        ccache -M 5G
+        ccache -z
+
     - name: Load custom feeds
       run: |
         [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
@@ -66,7 +82,11 @@ jobs:
     - name: Load custom configuration
       run: |
         [ -e files ] && mv files openwrt/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
+        if [ -e $CONFIG_FILE ]; then
+          echo "CONFIG_CCACHE=y" >> $CONFIG_FILE
+          echo "CONFIG_CCACHE_HOST=y" >> $CONFIG_FILE
+          mv $CONFIG_FILE openwrt/.config
+        fi
         chmod +x $DIY_P2_SH
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
